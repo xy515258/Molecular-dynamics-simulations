@@ -1,0 +1,76 @@
+#!/bin/bash
+
+##*******************************************************************************************
+## PBS-COMMAND SECTION: to make a pbs-command work, delete the first "#" in the desired line.
+##*******************************************************************************************
+##select a job queue
+#PBS -q blade
+##PBS -q gpu
+
+##job resources_list, nodes=/number of computing nodes/, ppn=/number of processors per node/
+#PBS -l nodes=2:ppn=12
+##PBS -l nodes=node16:ppn=8:gpus=2
+##PBS -l nodes=node1:ppn=8,walltime=00:30:00
+
+##define job name
+#PBS -N Ni2Al3_MP_auto
+
+
+
+
+#*******************************************************************************************
+# PROGRAM SECTION: delete the first "#" in the desired line to uncomment the line
+#*******************************************************************************************
+
+#**********************************************
+date
+echo "This jobs is "$PBS_JOBID@$PBS_QUEUE
+n_proc=$(cat $PBS_NODEFILE | wc -l) 
+cd $PBS_O_WORKDIR
+#**********************************************
+
+
+#**********************************************
+#run your program, replace "./wrf.exe" with your program executables:
+#time -p $OMPI_HOME/bin/mpirun --mca btl openib,self -np $n_proc ./wrf.exe > $PBS_JOBID.log
+
+Tm=1800
+
+x1=0
+x2=600
+((dx=${x2}-${x1}))
+while [ ${dx} -gt 3 ]
+do
+((x=(${x2}+${x1})/2))
+((TEMP1=${Tm}-${x}))
+mkdir ${TEMP1}
+cp in.MP ${TEMP1}
+cp cluster2.auto_update ${TEMP1}
+cp compair_revise_3 ${TEMP1}
+cd ${TEMP1}
+sed -i "s/TEMP/${TEMP1}/g" in.MP
+NP=`cat $PBS_NODEFILE|wc -l`
+mpirun -machinefile $PBS_NODEFILE -np $NP /public/software/lammps_openmpi/lmp_openmpi<in.MP -log MP.log
+
+date
+
+sed -i "s/TEMP/${TEMP1}/g" cluster2.auto_update
+./cluster2.auto_update
+./compair_revise_3
+
+for i in $(cat result)
+do
+if [ $i -eq 0 ];  then
+cd ../
+mv ${TEMP1} ${TEMP1}_l
+x1=${x}
+else 
+cd ../
+mv ${TEMP1} ${TEMP1}_s
+x2=${x}
+fi
+done
+((dx=${x2}-${x1}))
+done
+
+
